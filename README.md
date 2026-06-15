@@ -90,7 +90,40 @@ So for contact details there are two paths:
    FERC's Service List for that docket — the verified source for
    emails/phones/addresses.
 
-### Bulk contact extraction (script)
+### Companies tab — per-company contact sheets
+The **Companies** tab is built for "who's submitting this stuff." Pick a company
+(or search one), and the app pulls *that company's* filings from the **last 5
+years**, reads each PDF, and builds a table:
+
+| Name | Title | Phone | Email | Address |
+|------|-------|-------|-------|---------|
+
+with a **CSV export** and **Scan more filings** to go deeper. Because the same
+people sign a company's filings repeatedly, a modest scan surfaces the real
+submitters quickly.
+
+Why per-company instead of "all filings at once": pre-extracting *every* FERC
+filing for *all* companies would mean reading millions of PDFs (terabytes) —
+impossible to bundle or run in a browser. Scoping to the company you care about
+gets the same answer on demand. Two caveats carry over: extraction is
+**best-effort** (fields can be blank or slightly mis-paired when several people
+are stacked in one signature), and **scanned-image filings yield nothing** — so
+each sheet links the relevant dockets' **FERC Service Lists** for verification.
+
+> Note: FERC's company filter is fuzzy (a search for one company also returns
+> others sharing tokens like "LLC"), so the app filters client-side to the exact
+> company you chose.
+
+### Bulk / exhaustive company contacts (script)
+For *all* of a company's filings over N years (no browser caps), into a CSV:
+```bash
+pip install pypdf
+python3 scripts/company_contacts.py "PJM Interconnection, L.L.C."        # 5 years
+python3 scripts/company_contacts.py "Duke Energy Carolinas, LLC" 5 out.csv
+```
+Columns: `name, title, phone, email, address, source_accession, source_docket`.
+
+### Bulk contact extraction by docket (script)
 To harvest contacts for an entire docket into a CSV:
 ```bash
 pip install pypdf
@@ -151,7 +184,8 @@ No dependencies — standard-library Python 3 only.
 | `js/contacts.js` | Lazy-loads pdf.js; extracts emails/phones/signatures from PDFs |
 | `js/script-template.js` | Generates the per-docket downloader script |
 | `scripts/download_docket.py` | Standalone bulk PDF archiver |
-| `scripts/extract_contacts.py` | Bulk contact extractor (name/employer/email/phone → CSV) |
+| `scripts/extract_contacts.py` | Bulk contact extractor by docket (→ CSV) |
+| `scripts/company_contacts.py` | Per-company contact sheet, all filings over N years (→ CSV) |
 
 ### The FERC API (reverse-engineered)
 Base: `https://elibrary.ferc.gov/eLibrarywebapi/api`

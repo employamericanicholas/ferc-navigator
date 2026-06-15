@@ -71,6 +71,82 @@ const Contacts = {
     const { text, numPages } = await this.extractText(blob);
     return { ...this.parse(text), numPages };
   },
+
+  // ---- structured extraction (Name / Title / Phone / Email / Address) -------
+  // pdf.js flattens text; reconstruct LINES from per-item y-positions + EOL so
+  // we can parse signature blocks field-by-field.
+  async extractLines(blob, maxPages = 8) {
+    const pdfjs = await this.loadPdfjs();
+    const data = new Uint8Array(await blob.arrayBuffer());
+    const doc = await pdfjs.getDocument({ data }).promise;
+    const lines = [];
+    const n = Math.min(doc.numPages, maxPages);
+    for (let p = 1; p <= n; p++) {
+      const tc = await (await doc.getPage(p)).getTextContent();
+      let cur = [], lastY = null;
+      const flush = () => { const s = cur.join("").replace(/\s+/g, " ").trim(); if (s) lines.push(s); cur = []; };
+      for (const it of tc.items) {
+        const y = it.transform[5];
+        if (lastY !== null && Math.abs(y - lastY) > 3) flush();
+        cur.push(it.str);
+        if (it.hasEOL) { flush(); lastY = null; } else lastY = y;
+      }
+      flush();
+    }
+    return lines;
+  },
+
+  TITLE_RE: /(President|Vice President|Counsel|Attorney|Director|Manager|Secretary|Officer|Regulatory|Affairs|Analyst|Engineer|Specialist|Consultant|Chief|Partner|Associate|Paralegal|Administrator|Executive|Advisor|Representative|Agent)/i,
+  ADDR_RE: /(\d+\s+\w+.*(Street|St\.|Avenue|Ave\.|Boulevard|Blvd|Road|Rd\.|Drive|Dr\.|Lane|Ln\.|Suite|Floor|NW|NE|SW|SE|P\.?O\.?\s*Box))|([A-Z][a-zA-Z]+,?\s*[A-Z]{2}\s+\d{5})/,
+  ORG_RE: /(L\.?L\.?C|L\.?L\.?P|Inc\.|Corp|Compan(y|ies)|Commission|Energy|Power|Associates|P\.?C\.?|Partners|Group|Authority|Cooperative|Utilities|Electric|Gas)\b/i,
+
+  _looksLikeName(l) {
+    if (!l) return false;
+    const single = l.match(this.EMAIL) || this.PHONE.test(l);
+    if (single || this.TITLE_RE.test(l) || this.ADDR_RE.test(l) || this.ORG_RE.test(l)) return false;
+    const words = l.replace(/^\/s\/\s*/i, "").trim().split(/\s+/);
+    if (words.length < 2 || words.length > 5) return false;
+    return words.every((w) => /^[A-Z][A-Za-z.'’-]*\.?$/.test(w));
+  },
+
+  // Parse structured contacts from reconstructed lines. Email-anchored: for each
+  // email, look upward for a name + title and nearby for phone + address.
+  parseStructured(lines) {
+    const out = [];
+    for (let i = 0; i < lines.length; i++) {
+      const em = lines[i].match(this.EMAIL);
+      if (!em) continue;
+      const email = em[0].replace(/[.,;)]+$/, "").toLowerCase();
+      if (out.some((o) => o.email === email)) continue;
+
+      let phone = "", name = "", title = "", address = "";
+      const lo = Math.max(0, i - 6);
+      for (let j = lo; j <= i; j++) {
+        const pm = lines[j].match(this.PHONE);
+        if (pm && pm[0].replace(/\D/g, "").length >= 10) phone = pm[0];
+      }
+      const addrs = [];
+      for (let j = lo; j <= i; j++) if (this.ADDR_RE.test(lines[j])) addrs.push(lines[j]);
+      address = [...new Set(addrs)].join(", ");
+      for (let j = i; j >= lo; j--) {
+        if (this._looksLikeName(lines[j])) {
+          name = lines[j].replace(/^\/s\/\s*/i, "").trim();
+          for (let k = j + 1; k <= Math.min(lines.length - 1, j + 3); k++) {
+            if (this.TITLE_RE.test(lines[k]) && !lines[k].match(this.EMAIL) && !this.PHONE.test(lines[k])) {
+              title = lines[k]; break;
+            }
+          }
+          break;
+        }
+      }
+      out.push({ name, title, phone, email, address });
+    }
+    return out;
+  },
+
+  async structuredFromBlob(blob) {
+    return this.parseStructured(await this.extractLines(blob));
+  },
 };
 
 window.Contacts = Contacts;

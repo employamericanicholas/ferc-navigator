@@ -44,6 +44,7 @@ const App = {
     this.setActiveNav(parts[0] || "recent");
 
     if (parts[0] === "search") return this.viewSearch(params);
+    if (parts[0] === "companies") return this.viewCompanies(params);
     if (parts[0] === "people") return this.viewPeople(params);
     if (parts[0] === "docket") return this.viewDocket(decodeURIComponent(parts[1] || ""), params);
     return this.viewRecent(params);
@@ -801,6 +802,199 @@ const App = {
       this.root.replaceChildren(form);
       this.error(e, () => this.peopleBrowse(form, params));
     }
+  },
+
+  // ---- VIEW: companies (contact sheets) -------------------------------------
+  viewCompanies(params) {
+    const org = (params.get("org") || "").trim();
+    if (org) return this.companySheet(org, params);
+    return this.companyBrowse(params);
+  },
+
+  companyForm(org) {
+    const form = Util.el("form", { class: "search-controls" });
+    const input = Util.el("input", { type: "text", value: org || "", placeholder: "Company / organization name (e.g. Duke Energy Carolinas, LLC)", class: "ctl-q" });
+    form.replaceChildren(
+      Util.el("div", { class: "ctl-row" }, [
+        input, Util.el("button", { class: "btn", type: "submit" }, "Build contact sheet"),
+      ]),
+      Util.el("p", { class: "muted small" },
+        "Pick a company below or type one. The app pulls that company's filings from the last 5 years, reads the PDFs, and extracts the signatures into a table."),
+    );
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const v = input.value.trim();
+      location.hash = v ? `#/companies?org=${encodeURIComponent(v)}` : "#/companies";
+    });
+    return form;
+  },
+
+  async companyBrowse(params) {
+    const form = this.companyForm("");
+    this.root.replaceChildren(form, this.loadingInline());
+    try {
+      const { hits } = await this.fetchAll(
+        { text: "*", startDate: Util.fmtDate(Util.daysAgo(4)), endDate: Util.fmtDate(new Date()), dateType: "filed_date" },
+        1500);
+      const orgs = this.aggregateOrgs(hits);
+      const head = Util.el("div", { class: "view-head" }, [
+        Util.el("h1", {}, "Companies"),
+        Util.el("p", { class: "muted" },
+          `${orgs.length.toLocaleString()} organizations filed in the last few days. Pick one to build its contact sheet, or search any company above.`),
+        Util.el("p", { class: "note-contacts" }, [
+          "ℹ️ Contacts are parsed from the signature blocks of the company's filings over the last 5 years — best-effort. Scanned-image filings can't be read; always verify against FERC's Service List (linked on the sheet).",
+        ]),
+      ]);
+      const filter = Util.el("input", { type: "text", class: "ctl-q", placeholder: "Filter companies…" });
+      const grid = Util.el("div", { class: "people-grid" });
+      const render = (q) => {
+        const ql = q.toLowerCase();
+        const rows = orgs.filter((o) => !ql || o.org.toLowerCase().includes(ql));
+        grid.replaceChildren(...rows.slice(0, 400).map((o) =>
+          Util.el("a", { class: "people-card", href: `#/companies?org=${encodeURIComponent(o.org)}` }, [
+            Util.el("div", { class: "pc-name" }, o.org),
+            Util.el("div", { class: "pc-meta" }, `${o.count} filing${o.count === 1 ? "" : "s"} recently · ${o.people.size} known signer(s)`),
+          ])));
+        if (!rows.length) grid.replaceChildren(Util.el("p", { class: "muted pad" }, "No matches."));
+      };
+      filter.addEventListener("input", () => render(filter.value));
+      render("");
+      this.root.replaceChildren(form, head, Util.el("div", { class: "results-head" }, [filter]), grid);
+    } catch (e) {
+      this.root.replaceChildren(form);
+      this.error(e, () => this.companyBrowse(params));
+    }
+  },
+
+  // Collect a company's filings (last 5 yrs), keeping only exact-org matches
+  // (the server filter is fuzzy), up to `cap`.
+  async collectCompanyFilings(org, cap, onProgress) {
+    const norm = (s) => (s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+    const target = norm(org);
+    const end = new Date();
+    const start = new Date();
+    start.setFullYear(end.getFullYear() - 5);
+    const sd = Util.fmtDate(start), ed = Util.fmtDate(end);
+    const matched = [];
+    let page = 1, total = Infinity, scanned = 0;
+    while (matched.length < cap && page <= 40) {
+      const res = await FERC.search({
+        person: { affiliation: org }, startDate: sd, endDate: ed, dateType: "filed_date",
+        perPage: 100, page,
+      });
+      total = res.totalHits;
+      for (const f of res.hits) {
+        if (f.authors.some((a) => {
+          const n = norm(a.org);
+          return n && (n === target || n.includes(target) || target.includes(n));
+        })) matched.push(f);
+      }
+      scanned += res.hits.length;
+      if (onProgress) onProgress(matched.length, total);
+      if (!res.hits.length || page * 100 >= total) break;
+      page++;
+    }
+    return { matched: matched.slice(0, cap), total };
+  },
+
+  async companySheet(org, params) {
+    const scanCap = parseInt(params.get("scan") || "25", 10);
+    const head = Util.el("div", { class: "view-head" }, [
+      Util.el("h1", {}, org),
+      Util.el("p", { class: "muted" }, "Building contact sheet from the last 5 years of filings…"),
+    ]);
+    const progress = Util.el("div", { class: "loading" }, [
+      Util.el("div", { class: "spinner" }), Util.el("p", { class: "prog-msg" }, "Finding filings…"),
+    ]);
+    const msg = progress.querySelector(".prog-msg");
+    this.root.replaceChildren(head, progress);
+
+    try {
+      const { matched, total } = await this.collectCompanyFilings(org, scanCap,
+        (m, t) => { msg.textContent = `Finding filings… ${m} matched of ${t.toLocaleString()}`; });
+
+      const contacts = [];
+      const seen = new Set();
+      let withText = 0, processed = 0;
+      for (const f of matched) {
+        processed++;
+        msg.textContent = `Reading PDFs… filing ${processed} of ${matched.length} (${contacts.length} contacts so far)`;
+        const pdfs = f.files
+          .filter((x) => /pdf/i.test(x.type) || /\.pdf$/i.test(x.name))
+          .sort((a, b) => (/(transmit|letter|cover|sig)/i.test(b.name) ? 1 : 0) - (/(transmit|letter|cover|sig)/i.test(a.name) ? 1 : 0));
+        for (const file of pdfs.slice(0, 2)) {
+          let lines;
+          try { lines = await Contacts.extractLines(await FERC.fileBlob(file.fileId)); }
+          catch { continue; }
+          if (lines.join("").trim().length > 30) withText++;
+          for (const c of Contacts.parseStructured(lines)) {
+            const key = (c.email || `${c.name}|${c.phone}`).trim().toLowerCase();
+            if (!key || key === "|" || seen.has(key)) continue;
+            seen.add(key);
+            contacts.push({ ...c, accession: f.accession, docket: f.dockets[0] ? Util.baseDocket(f.dockets[0]) : "" });
+          }
+        }
+      }
+      contacts.sort((a, b) => (a.name || "~").localeCompare(b.name || "~"));
+      this.renderCompanySheet(org, contacts, { matched: matched.length, total, withText, scanCap });
+    } catch (e) {
+      this.error(e, () => this.companySheet(org, params));
+    }
+  },
+
+  renderCompanySheet(org, contacts, info) {
+    const dockets = [...new Set(contacts.map((c) => c.docket).filter(Boolean))].slice(0, 12);
+    const base = `FERC_${org.replace(/\W+/g, "_").slice(0, 40)}_contacts`;
+
+    const head = Util.el("div", { class: "view-head" }, [
+      Util.el("h1", {}, org),
+      Util.el("p", { class: "muted" },
+        `${contacts.length} distinct contact(s) from ${info.matched} of ${info.total.toLocaleString()} filings scanned (${info.withText} had readable text).`),
+      Util.el("p", { class: "note-contacts" },
+        "Best-effort extraction from PDF signature blocks — fields can be imperfect or blank, and scanned-image filings yield nothing. Verify against FERC's official Service List below."),
+      Util.el("div", { class: "export-bar" }, [
+        Util.el("button", { class: "btn btn-sm", onclick: () =>
+          Util.saveText(Util.contactsToCsv(contacts), `${base}.csv`, "text/csv") }, "⬇ Contacts CSV"),
+        Util.el("a", { class: "btn btn-sm btn-ghost-dark", href: `#/companies?org=${encodeURIComponent(org)}&scan=${info.scanCap + 25}` },
+          `Scan more filings (${info.scanCap} → ${info.scanCap + 25})`),
+      ]),
+    ]);
+
+    let table;
+    if (!contacts.length) {
+      table = Util.el("p", { class: "muted pad" },
+        "No contacts could be extracted — this company's recent filings may be scanned images. Try the Service List links, or 'Scan more filings'.");
+    } else {
+      const th = (t) => Util.el("th", {}, t);
+      const td = (c) => Util.el("td", {}, c);
+      const rows = contacts.map((c) => Util.el("tr", {}, [
+        td(c.name || "—"),
+        td(c.title || "—"),
+        td(c.phone ? Util.el("a", { href: `tel:${c.phone.replace(/[^\d+]/g, "")}` }, c.phone) : "—"),
+        td(c.email ? Util.el("a", { href: `mailto:${c.email}` }, c.email) : "—"),
+        td(c.address || "—"),
+        Util.el("td", { class: "src-cell" }, c.accession
+          ? Util.el("a", { href: FERC.docInfoUrl(c.accession), target: "_blank", rel: "noopener", title: c.accession }, "↗")
+          : ""),
+      ]));
+      table = Util.el("div", { class: "table-wrap" }, [
+        Util.el("table", { class: "contact-table" }, [
+          Util.el("thead", {}, Util.el("tr", {}, [th("Name"), th("Title"), th("Phone"), th("Email"), th("Address"), th("Src")])),
+          Util.el("tbody", {}, rows),
+        ]),
+      ]);
+    }
+
+    const serviceLinks = dockets.length
+      ? Util.el("div", { class: "people-panel" }, [
+          Util.el("div", { class: "panel-sub" }, "Verify contacts on FERC's official Service List"),
+          Util.el("div", { class: "pill-row" }, dockets.map((d) =>
+            Util.el("a", { class: "person-pill", href: FERC.serviceListUrl(d), target: "_blank", rel: "noopener" },
+              [d, Util.el("span", { class: "pill-count" }, "↗")]))),
+        ])
+      : null;
+
+    this.root.replaceChildren(this.companyForm(org), head, table, serviceLinks);
   },
 
   // ---- exports --------------------------------------------------------------

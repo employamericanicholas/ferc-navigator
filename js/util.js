@@ -120,6 +120,15 @@ const Util = {
     return [head.join(","), ...rows].join("\n");
   },
 
+  // CSV for a company contact sheet (Name/Title/Phone/Email/Address).
+  contactsToCsv(rows) {
+    const head = ["name", "title", "phone", "email", "address", "source_accession", "source_docket"];
+    const body = rows.map((r) => [
+      r.name, r.title, r.phone, r.email, r.address, r.accession || "", r.docket || "",
+    ].map((c) => this.csvCell(c)).join(","));
+    return [head.join(","), ...body].join("\n");
+  },
+
   // CSV for an aggregated people directory.
   peopleToCsv(people) {
     const head = ["name", "last_name", "first_initial", "employer",

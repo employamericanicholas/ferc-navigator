@@ -195,6 +195,15 @@ mark { background: #fde68a; padding: 0 2px; border-radius: 3px; }
 .ctl-field.grow { flex: 1 1 280px; }
 .ctl-initial { width: 64px; }
 
+/* ---- company contact table ---- */
+.table-wrap { overflow-x: auto; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); }
+.contact-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.contact-table th { text-align: left; background: #f0f5fa; color: var(--brand-700); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; padding: 9px 12px; border-bottom: 2px solid var(--line); position: sticky; top: 0; }
+.contact-table td { padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.contact-table tr:hover td { background: #f7fbf9; }
+.contact-table td:nth-child(5) { color: var(--muted); max-width: 280px; }
+.src-cell { text-align: center; }
+
 /* ---- contact extraction ---- */
 .contacts-block { margin: 4px 0 10px; }
 .btn-contacts { background: #fff; color: var(--brand-700); border: 1px dashed var(--brand); }
