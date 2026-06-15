@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FERC Navigator — search & download every FERC filing</title>
+  <meta name="description" content="A clean, fast interface to FERC eLibrary: browse dockets, search inside PDF text, and download filings in bulk." />
+  <link rel="stylesheet" href="css/style.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>⚡</text></svg>" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="brand">
+      <a href="#/recent" class="logo">⚡ FERC Navigator</a>
+      <nav class="nav">
+        <a href="#/recent" data-nav="recent">Recent dockets</a>
+        <a href="#/search" data-nav="search">Search</a>
+      </nav>
+    </div>
+
+    <div class="header-tools">
+      <form id="global-search" class="header-search" autocomplete="off">
+        <input id="global-q" type="text" placeholder="Search filings by keyword…" aria-label="Search filings" />
+        <label class="ft-toggle" title="Search inside the full OCR'd text of every PDF">
+          <input id="global-fulltext" type="checkbox" /> PDF text
+        </label>
+        <button class="btn" type="submit">Search</button>
+      </form>
+      <form id="docket-jump" class="header-docket" autocomplete="off">
+        <input id="docket-q" type="text" placeholder="Go to docket #, e.g. ER26-1800" aria-label="Go to docket" />
+        <button class="btn btn-ghost" type="submit">Go</button>
+      </form>
+    </div>
+  </header>
+
+  <main id="view" class="view"></main>
+
+  <footer class="site-footer">
+    <p>
+      Data served live from
+      <a href="https://elibrary.ferc.gov/" target="_blank" rel="noopener">FERC eLibrary</a>.
+      This is an independent, unofficial interface and is not affiliated with the
+      Federal Energy Regulatory Commission. All documents are public records hosted by FERC.
+    </p>
+  </footer>
+
+  <!-- JSZip for in-browser bulk PDF downloads (optional; graceful fallback) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"
+          integrity="sha512-XMVd28F1oH/O71fzwBnV7HucLxVwtxf26XV8P4wPk26EDxuGZ91N8bsOttmnomcCD3CS5ZMRL50H0GgOHvegtg=="
+          crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="js/util.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/script-template.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

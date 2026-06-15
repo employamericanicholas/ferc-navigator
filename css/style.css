@@ -1,0 +1,163 @@
+/* FERC Navigator — styles. Clean, dense, government-data aesthetic. */
+:root {
+  --bg: #f5f7fa;
+  --panel: #ffffff;
+  --ink: #15212e;
+  --muted: #5e6b7a;
+  --line: #dde3ea;
+  --brand: #1b4f7a;
+  --brand-700: #143b5c;
+  --accent: #0a7d52;
+  --warn: #b54708;
+  --radius: 10px;
+  --shadow: 0 1px 3px rgba(20, 40, 60, .08), 0 1px 2px rgba(20, 40, 60, .04);
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  color: var(--ink);
+  background: var(--bg);
+}
+a { color: var(--brand); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.muted { color: var(--muted); }
+.small { font-size: 13px; }
+.pad { padding: 24px 4px; }
+
+/* ---- header ---- */
+.site-header {
+  background: var(--brand);
+  color: #fff;
+  padding: 10px 20px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  box-shadow: var(--shadow);
+}
+.brand { display: flex; align-items: baseline; gap: 22px; }
+.logo { color: #fff; font-weight: 700; font-size: 19px; letter-spacing: .2px; }
+.logo:hover { text-decoration: none; opacity: .92; }
+.nav a { color: #cfe0ee; margin-right: 16px; font-size: 14px; }
+.nav a.active, .nav a:hover { color: #fff; text-decoration: none; }
+.nav a.active { border-bottom: 2px solid #fff; padding-bottom: 2px; }
+
+.header-tools { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.header-search, .header-docket { display: flex; gap: 6px; align-items: center; }
+.header-search input[type=text], .header-docket input[type=text] {
+  padding: 7px 10px; border: 1px solid #2c628c; border-radius: 8px;
+  background: #fff; color: var(--ink); min-width: 200px; font-size: 14px;
+}
+.header-docket input[type=text] { min-width: 200px; }
+.ft-toggle { font-size: 12px; color: #d8e6f1; display: flex; align-items: center; gap: 4px; white-space: nowrap; }
+
+/* ---- buttons ---- */
+.btn {
+  background: var(--accent); color: #fff; border: none; cursor: pointer;
+  padding: 8px 14px; border-radius: 8px; font-size: 14px; font-weight: 600;
+  transition: filter .15s, opacity .15s;
+}
+.btn:hover { filter: brightness(1.07); }
+.btn:disabled { opacity: .6; cursor: default; }
+.btn-ghost { background: rgba(255,255,255,.15); }
+.btn-sm { padding: 6px 11px; font-size: 13px; font-weight: 600; }
+.btn-primary { background: var(--brand); }
+.btn-file { background: #eef3f8; color: var(--brand-700); border: 1px solid var(--line); text-align: left; }
+.btn-file:hover { background: #e2ecf5; filter: none; }
+.fsize { color: var(--muted); font-weight: 400; font-size: 12px; }
+
+/* ---- layout ---- */
+.view { max-width: 1080px; margin: 0 auto; padding: 24px 20px 60px; }
+.view-head { margin-bottom: 18px; }
+.view-head h1 { margin: 0 0 4px; font-size: 26px; }
+
+/* ---- chips / window controls ---- */
+.window-controls { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+.chip {
+  padding: 5px 13px; border: 1px solid var(--line); border-radius: 999px;
+  background: var(--panel); color: var(--brand); font-size: 13px; font-weight: 600;
+}
+.chip:hover { text-decoration: none; border-color: var(--brand); }
+.chip.active { background: var(--brand); color: #fff; border-color: var(--brand); }
+
+/* ---- docket list (recent) ---- */
+.docket-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 14px; }
+.docket-card {
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 16px; box-shadow: var(--shadow); color: var(--ink);
+  display: flex; flex-direction: column; gap: 8px; transition: transform .12s, box-shadow .12s;
+}
+.docket-card:hover { text-decoration: none; transform: translateY(-2px); box-shadow: 0 4px 14px rgba(20,40,60,.12); border-color: #c4d2e0; }
+.docket-card-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.docket-num { font-weight: 700; font-size: 17px; color: var(--brand-700); }
+.docket-count { font-size: 12px; color: var(--muted); background: #eef3f8; padding: 2px 9px; border-radius: 999px; white-space: nowrap; }
+.docket-latest { margin: 0; font-size: 13px; color: var(--ink); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.docket-date { font-size: 12px; color: var(--muted); }
+
+/* ---- filings ---- */
+.results { display: flex; flex-direction: column; gap: 14px; }
+.filing {
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 16px 18px; box-shadow: var(--shadow);
+}
+.filing-desc { margin: 0 0 10px; font-size: 15px; }
+.filing-meta { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--muted); margin-bottom: 8px; }
+.filing-meta strong { color: var(--ink); font-weight: 600; }
+.filing-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.tag { font-size: 11px; background: #eef3f8; color: var(--brand-700); padding: 2px 9px; border-radius: 6px; }
+.badge { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; background: #e7eef5; color: var(--brand-700); padding: 3px 9px; border-radius: 6px; }
+.badge-ok { background: #e2f2ea; color: var(--accent); }
+.files { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0 10px; }
+.file-row { display: inline-flex; }
+.src-link { font-size: 13px; color: var(--muted); }
+
+mark { background: #fde68a; padding: 0 2px; border-radius: 3px; }
+
+/* ---- search controls ---- */
+.search-controls { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; margin-bottom: 18px; box-shadow: var(--shadow); }
+.ctl-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+.ctl-row + .ctl-row { margin-top: 10px; }
+.ctl-q { flex: 1 1 280px; padding: 9px 12px; border: 1px solid var(--line); border-radius: 8px; font-size: 15px; }
+.ctl-dates input { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; width: 130px; }
+.ctl-check { display: flex; align-items: center; gap: 6px; font-size: 14px; white-space: nowrap; }
+
+.results-head { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 14px; }
+.results-head h2 { margin: 0; font-size: 19px; flex: 1 1 auto; }
+
+/* ---- export bars ---- */
+.export-bar { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+
+/* ---- pager ---- */
+.pager { display: flex; gap: 14px; align-items: center; justify-content: center; margin: 26px 0 0; }
+.pageinfo { font-size: 13px; color: var(--muted); }
+
+/* ---- loading / errors ---- */
+.loading { text-align: center; padding: 60px 0; color: var(--muted); }
+.spinner { width: 34px; height: 34px; border: 3px solid var(--line); border-top-color: var(--brand); border-radius: 50%; margin: 0 auto 14px; animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.error-box { background: #fff4ed; border: 1px solid #fcd9bd; color: #7a3c12; border-radius: var(--radius); padding: 20px; }
+.error-box h3 { margin: 0 0 6px; }
+.error-box .btn { margin-top: 10px; }
+
+/* ---- modal ---- */
+.modal-backdrop { position: fixed; inset: 0; background: rgba(15,33,46,.55); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 20px; }
+.modal { background: #fff; border-radius: var(--radius); max-width: 760px; width: 100%; max-height: 85vh; overflow: auto; padding: 22px 24px; box-shadow: 0 12px 40px rgba(0,0,0,.3); }
+.modal h3 { margin: 0 0 8px; }
+.code { background: #0f1b27; color: #d7e3ef; padding: 14px; border-radius: 8px; overflow: auto; font: 12px/1.45 "SF Mono", Menlo, Consolas, monospace; max-height: 50vh; }
+.modal-actions { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+
+/* ---- footer ---- */
+.site-footer { border-top: 1px solid var(--line); background: var(--panel); padding: 18px 20px; }
+.site-footer p { max-width: 1080px; margin: 0 auto; font-size: 12px; color: var(--muted); }
+
+@media (max-width: 640px) {
+  .header-search input[type=text], .header-docket input[type=text] { min-width: 140px; }
+  .brand { gap: 12px; }
+}
