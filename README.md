@@ -72,9 +72,32 @@ Those live in two places this static site can't reach directly:
 2. **FERC's official Service List** — which *does* have emails/phones/addresses,
    but sits behind a web firewall with no public JSON/CORS access.
 
-So for contact details, every docket page (and person profile) links out to
-**"Contacts (email/phone) at FERC ↗"**, which opens FERC's Service List tool for
-that docket. That's the authoritative, official source for contact information.
+So for contact details there are two paths:
+
+1. **Extract from the PDF (built in).** Every filing card has a **🔎 Find
+   contacts in PDF** button. It downloads the filing's PDF(s), reads the text
+   layer with [pdf.js](https://mozilla.github.io/pdf.js/) right in your browser,
+   and parses the signature block for **emails, phone numbers, and the
+   signatory's name/title/employer**. Works great on modern e-filings — e.g. a
+   PJM tariff filing yields `craig.glazer@pjm.com`, `(202) 423-4743`, and the
+   full "Respectfully submitted, Craig Glazer, Vice President…" block.
+
+   ⚠️ Many older or third-party filings are **scanned images with no text
+   layer** — those can't be parsed, and the tool says so plainly.
+
+2. **FERC's official Service List (authoritative).** Every docket page, person
+   profile, and contacts box links out to **"Contacts at FERC ↗"**, which opens
+   FERC's Service List for that docket — the verified source for
+   emails/phones/addresses.
+
+### Bulk contact extraction (script)
+To harvest contacts for an entire docket into a CSV:
+```bash
+pip install pypdf
+python3 scripts/extract_contacts.py ER26-1800
+```
+Outputs `accession, filed_date, dockets, author, employer, emails, phones,
+had_text_layer, signature_block` per filing.
 
 ---
 
@@ -125,8 +148,10 @@ No dependencies — standard-library Python 3 only.
 | `js/api.js` | FERC eLibrary API client (search, file download) |
 | `js/util.js` | Formatting, dates, CSV, DOM, blob saving |
 | `js/app.js` | Hash router + the three views (Recent / Search / Docket) |
+| `js/contacts.js` | Lazy-loads pdf.js; extracts emails/phones/signatures from PDFs |
 | `js/script-template.js` | Generates the per-docket downloader script |
-| `scripts/download_docket.py` | Standalone bulk archiver |
+| `scripts/download_docket.py` | Standalone bulk PDF archiver |
+| `scripts/extract_contacts.py` | Bulk contact extractor (name/employer/email/phone → CSV) |
 
 ### The FERC API (reverse-engineered)
 Base: `https://elibrary.ferc.gov/eLibrarywebapi/api`

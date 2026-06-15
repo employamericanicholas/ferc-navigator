@@ -195,6 +195,16 @@ mark { background: #fde68a; padding: 0 2px; border-radius: 3px; }
 .ctl-field.grow { flex: 1 1 280px; }
 .ctl-initial { width: 64px; }
 
+/* ---- contact extraction ---- */
+.contacts-block { margin: 4px 0 10px; }
+.btn-contacts { background: #fff; color: var(--brand-700); border: 1px dashed var(--brand); }
+.btn-contacts:hover { background: #eef3f8; filter: none; }
+.contacts-card { margin-top: 10px; background: #f7fbf9; border: 1px solid #cfe6da; border-radius: 8px; padding: 11px 13px; font-size: 13px; }
+.contact-line { margin: 2px 0; }
+.contact-label { font-weight: 700; color: var(--brand-700); }
+.contact-sig { margin: 6px 0; padding: 8px 10px; background: #fff; border-left: 3px solid var(--accent); border-radius: 4px; color: var(--ink); font-size: 12px; }
+.contact-fallback { margin: 8px 0 0; font-size: 12px; color: var(--muted); }
+
 /* ---- footer ---- */
 .site-footer { border-top: 1px solid var(--line); background: var(--panel); padding: 18px 20px; }
 .site-footer p { max-width: 1080px; margin: 0 auto; font-size: 12px; color: var(--muted); }

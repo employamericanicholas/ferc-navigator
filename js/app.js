@@ -109,12 +109,106 @@ const App = {
       Util.el("div", { class: "filing-tags" },
         f.classTypes.map((c) => Util.el("span", { class: "tag" }, c))),
       files,
+      this.contactsBlock(f),
       Util.el("a", {
         class: "src-link",
         href: FERC.docInfoUrl(f.accession),
         target: "_blank", rel: "noopener",
       }, "Open at FERC ↗"),
     ]);
+  },
+
+  // Button + results area that extracts contacts from the filing's PDFs.
+  contactsBlock(f) {
+    const pdfs = f.files.filter((x) => /pdf/i.test(x.type) || /\.pdf$/i.test(x.name));
+    if (!pdfs.length) return null;
+    // Process transmittal letters first — that's where signatures usually live.
+    pdfs.sort((a, b) =>
+      (/(transmit|letter|cover)/i.test(b.name) ? 1 : 0) - (/(transmit|letter|cover)/i.test(a.name) ? 1 : 0));
+
+    const out = Util.el("div", { class: "contacts-out" });
+    const btn = Util.el("button", { class: "btn btn-sm btn-contacts" }, "🔎 Find contacts in PDF");
+    btn.addEventListener("click", () => this.findContacts(btn, out, pdfs, f));
+    return Util.el("div", { class: "contacts-block" }, [btn, out]);
+  },
+
+  async findContacts(btn, out, pdfs, f) {
+    btn.disabled = true;
+    const orig = btn.textContent;
+    const emails = new Set(), phones = new Set(), sigs = [];
+    let anyText = false, scanned = 0;
+    try {
+      for (const file of pdfs.slice(0, 3)) {
+        btn.textContent = `Reading ${file.name.slice(0, 24)}…`;
+        let res;
+        try {
+          const blob = await FERC.fileBlob(file.fileId);
+          res = await Contacts.fromBlob(blob);
+        } catch (e) {
+          console.warn("extract failed", file.name, e);
+          continue;
+        }
+        scanned++;
+        if (res.hasText) anyText = true;
+        res.emails.forEach((e) => emails.add(e));
+        res.phones.forEach((p) => phones.add(p));
+        for (const s of res.signatures) if (!sigs.includes(s)) sigs.push(s);
+        // Stop early once we have a solid hit.
+        if (emails.size && sigs.length) break;
+      }
+      this.renderContacts(out, f, [...emails], [...phones], sigs, anyText, scanned);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = orig;
+    }
+  },
+
+  renderContacts(out, f, emails, phones, sigs, anyText, scanned) {
+    const docket = f.dockets[0] ? Util.baseDocket(f.dockets[0]) : "";
+    const kids = [];
+
+    if (!scanned) {
+      kids.push(Util.el("p", { class: "muted small" },
+        "Couldn't read any PDF for this filing (it may be restricted)."));
+    } else if (!anyText) {
+      kids.push(Util.el("p", { class: "muted small" },
+        "This PDF appears to be a scanned image with no embedded text, so contacts can't be extracted automatically."));
+    } else if (!emails.length && !phones.length && !sigs.length) {
+      kids.push(Util.el("p", { class: "muted small" },
+        "No email, phone, or signature block detected in the text."));
+    } else {
+      if (emails.length) {
+        kids.push(Util.el("div", { class: "contact-line" }, [
+          Util.el("span", { class: "contact-label" }, "✉ Emails: "),
+          ...emails.flatMap((e, i) => [
+            i ? document.createTextNode(", ") : null,
+            Util.el("a", { href: `mailto:${e}` }, e),
+          ].filter(Boolean)),
+        ]));
+      }
+      if (phones.length) {
+        kids.push(Util.el("div", { class: "contact-line" }, [
+          Util.el("span", { class: "contact-label" }, "☎ Phones: "),
+          phones.join(", "),
+        ]));
+      }
+      if (sigs.length) {
+        kids.push(Util.el("div", { class: "contact-sig" }, [
+          Util.el("span", { class: "contact-label" }, "Signature block: "),
+          Util.el("span", {}, sigs[0]),
+        ]));
+      }
+    }
+
+    // Always offer the authoritative source.
+    if (docket) {
+      kids.push(Util.el("p", { class: "contact-fallback" }, [
+        "Official contacts (verified email/phone/address): ",
+        Util.el("a", { href: FERC.serviceListUrl(docket), target: "_blank", rel: "noopener" },
+          `FERC Service List for ${docket} ↗`),
+      ]));
+    }
+    out.replaceChildren(Util.el("div", { class: "contacts-card" }, kids));
   },
 
   fileRow(file, accession) {
