@@ -1,0 +1,6 @@
+name = "ferc-navigator-proxy"
+main = "worker.js"
+compatibility_date = "2025-01-01"
+
+# Deploy with:  cd proxy && npx wrangler deploy
+# (run `npx wrangler login` once first)

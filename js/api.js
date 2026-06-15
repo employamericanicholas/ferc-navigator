@@ -9,8 +9,14 @@
 //   POST Docket/GetSingleDocketSheet  -> raw docket sheet (we mostly use search)
 //   POST File/DownloadP8File          -> raw bytes of a single file (PDF, etc.)
 
+// FERC's API rejects browser CORS preflight requests, so API calls are routed
+// through a tiny Cloudflare Worker proxy (see proxy/worker.js). Human-facing
+// page links (docinfo, service list) point straight at FERC — those open in a
+// new tab and don't need proxying.
+const API_PROXY = "https://ferc-navigator-proxy.nicholas-1dd.workers.dev";
+
 const FERC = {
-  BASE: "https://elibrary.ferc.gov/eLibrarywebapi/api",
+  BASE: `${API_PROXY}/eLibrarywebapi/api`,
 
   // Human-facing FERC pages (good fallbacks / "open at source" links).
   docInfoUrl(accession) {
