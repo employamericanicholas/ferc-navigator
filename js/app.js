@@ -811,6 +811,70 @@ const App = {
     return this.companyBrowse(params);
   },
 
+  // Cached list of companies that power the dropdown (built by
+  // scripts/build_companies.py into data/companies.json).
+  _companies: null,
+  async loadCompanies() {
+    if (this._companies) return this._companies;
+    try {
+      const res = await fetch("data/companies.json", { cache: "force-cache" });
+      this._companies = res.ok ? await res.json() : [];
+    } catch {
+      this._companies = [];
+    }
+    return this._companies;
+  },
+
+  // A searchable dropdown of companies. `onPick(name)` fires on selection;
+  // typing + Enter also submits free text (for companies not in the list).
+  companyCombobox(companies, onPick, initial = "") {
+    const input = Util.el("input", {
+      type: "text", class: "combo-input", value: initial, autocomplete: "off",
+      placeholder: `Select or search ${companies.length.toLocaleString()} companies…`,
+    });
+    const panel = Util.el("div", { class: "combo-panel hidden" });
+    const wrap = Util.el("div", { class: "combo" }, [input, panel]);
+
+    let activeIdx = -1, shown = [];
+    const renderPanel = () => {
+      const q = input.value.trim().toLowerCase();
+      shown = (q
+        ? companies.filter((c) => c.name.toLowerCase().includes(q))
+        : companies).slice(0, 80);
+      activeIdx = -1;
+      if (!shown.length) {
+        panel.replaceChildren(Util.el("div", { class: "combo-empty" },
+          q ? `No match — press Enter to use “${input.value.trim()}” anyway` : "Start typing…"));
+      } else {
+        panel.replaceChildren(...shown.map((c, i) =>
+          Util.el("div", { class: "combo-opt", "data-i": i, onmousedown: (e) => { e.preventDefault(); onPick(c.name); } },
+            [Util.el("span", {}, c.name), Util.el("span", { class: "pill-count" }, String(c.count))])));
+      }
+      panel.classList.remove("hidden");
+    };
+    const move = (d) => {
+      if (!shown.length) return;
+      activeIdx = (activeIdx + d + shown.length) % shown.length;
+      [...panel.children].forEach((el, i) => el.classList.toggle("active", i === activeIdx));
+      const act = panel.children[activeIdx];
+      if (act) act.scrollIntoView({ block: "nearest" });
+    };
+
+    input.addEventListener("focus", renderPanel);
+    input.addEventListener("input", renderPanel);
+    input.addEventListener("blur", () => setTimeout(() => panel.classList.add("hidden"), 150));
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "ArrowDown") { e.preventDefault(); move(1); }
+      else if (e.key === "ArrowUp") { e.preventDefault(); move(-1); }
+      else if (e.key === "Enter") {
+        e.preventDefault();
+        if (activeIdx >= 0 && shown[activeIdx]) onPick(shown[activeIdx].name);
+        else if (input.value.trim()) onPick(input.value.trim());
+      } else if (e.key === "Escape") panel.classList.add("hidden");
+    });
+    return wrap;
+  },
+
   companyForm(org) {
     const form = Util.el("form", { class: "search-controls" });
     const input = Util.el("input", { type: "text", value: org || "", placeholder: "Company / organization name (e.g. Duke Energy Carolinas, LLC)", class: "ctl-q" });
@@ -830,40 +894,39 @@ const App = {
   },
 
   async companyBrowse(params) {
-    const form = this.companyForm("");
-    this.root.replaceChildren(form, this.loadingInline());
-    try {
-      const { hits } = await this.fetchAll(
-        { text: "*", startDate: Util.fmtDate(Util.daysAgo(4)), endDate: Util.fmtDate(new Date()), dateType: "filed_date" },
-        1500);
-      const orgs = this.aggregateOrgs(hits);
-      const head = Util.el("div", { class: "view-head" }, [
-        Util.el("h1", {}, "Companies"),
-        Util.el("p", { class: "muted" },
-          `${orgs.length.toLocaleString()} organizations filed in the last few days. Pick one to build its contact sheet, or search any company above.`),
-        Util.el("p", { class: "note-contacts" }, [
-          "ℹ️ Contacts are parsed from the signature blocks of the company's filings over the last 5 years — best-effort. Scanned-image filings can't be read; always verify against FERC's Service List (linked on the sheet).",
-        ]),
-      ]);
-      const filter = Util.el("input", { type: "text", class: "ctl-q", placeholder: "Filter companies…" });
-      const grid = Util.el("div", { class: "people-grid" });
-      const render = (q) => {
-        const ql = q.toLowerCase();
-        const rows = orgs.filter((o) => !ql || o.org.toLowerCase().includes(ql));
-        grid.replaceChildren(...rows.slice(0, 400).map((o) =>
-          Util.el("a", { class: "people-card", href: `#/companies?org=${encodeURIComponent(o.org)}` }, [
-            Util.el("div", { class: "pc-name" }, o.org),
-            Util.el("div", { class: "pc-meta" }, `${o.count} filing${o.count === 1 ? "" : "s"} recently · ${o.people.size} known signer(s)`),
-          ])));
-        if (!rows.length) grid.replaceChildren(Util.el("p", { class: "muted pad" }, "No matches."));
-      };
-      filter.addEventListener("input", () => render(filter.value));
-      render("");
-      this.root.replaceChildren(form, head, Util.el("div", { class: "results-head" }, [filter]), grid);
-    } catch (e) {
-      this.root.replaceChildren(form);
-      this.error(e, () => this.companyBrowse(params));
-    }
+    this.root.replaceChildren(Util.el("div", { class: "view-head" }, [Util.el("h1", {}, "Companies")]), this.loadingInline());
+    const companies = await this.loadCompanies();
+    const pick = (name) => { if (name) location.hash = `#/companies?org=${encodeURIComponent(name)}`; };
+
+    const head = Util.el("div", { class: "view-head" }, [
+      Util.el("h1", {}, "Companies"),
+      Util.el("p", { class: "muted" },
+        companies.length
+          ? `Pick from ${companies.length.toLocaleString()} companies that have filed with FERC (most active first), then I'll build its contact sheet.`
+          : "Search a company to build its contact sheet."),
+    ]);
+
+    const picker = Util.el("div", { class: "company-picker" }, [
+      Util.el("label", { class: "picker-label" }, "Choose a company"),
+      companies.length
+        ? this.companyCombobox(companies, pick)
+        : this.companyForm("").firstChild, // fallback to plain input row
+      Util.el("p", { class: "note-contacts" },
+        "ℹ️ Contacts come from the signature blocks of the company's filings over the last 5 years — best-effort. Scanned-image filings can't be read; verify against FERC's Service List (linked on each sheet)."),
+    ]);
+
+    // Secondary: quick list of the most active filers as clickable chips.
+    const top = companies.slice(0, 60);
+    const topBlock = top.length
+      ? Util.el("section", { class: "people-panel" }, [
+          Util.el("div", { class: "panel-sub" }, "Most active filers"),
+          Util.el("div", { class: "pill-row" }, top.map((c) =>
+            Util.el("a", { class: "person-pill", href: `#/companies?org=${encodeURIComponent(c.name)}`, title: `${c.count} filings` },
+              [c.name, Util.el("span", { class: "pill-count" }, String(c.count))]))),
+        ])
+      : null;
+
+    this.root.replaceChildren(head, picker, topBlock);
   },
 
   // Collect a company's filings (last 5 yrs), keeping only exact-org matches
@@ -899,6 +962,7 @@ const App = {
 
   async companySheet(org, params) {
     const scanCap = parseInt(params.get("scan") || "25", 10);
+    this.loadCompanies(); // warm the cache for the picker (non-blocking)
     const head = Util.el("div", { class: "view-head" }, [
       Util.el("h1", {}, org),
       Util.el("p", { class: "muted" }, "Building contact sheet from the last 5 years of filings…"),
@@ -994,7 +1058,15 @@ const App = {
         ])
       : null;
 
-    this.root.replaceChildren(this.companyForm(org), head, table, serviceLinks);
+    const picker = (this._companies && this._companies.length)
+      ? Util.el("div", { class: "company-picker" }, [
+          Util.el("label", { class: "picker-label" }, "Switch company"),
+          this.companyCombobox(this._companies,
+            (name) => { if (name) location.hash = `#/companies?org=${encodeURIComponent(name)}`; }, ""),
+        ])
+      : this.companyForm(org);
+
+    this.root.replaceChildren(picker, head, table, serviceLinks);
   },
 
   // ---- exports --------------------------------------------------------------

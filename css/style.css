@@ -195,6 +195,19 @@ mark { background: #fde68a; padding: 0 2px; border-radius: 3px; }
 .ctl-field.grow { flex: 1 1 280px; }
 .ctl-initial { width: 64px; }
 
+/* ---- company picker / combobox ---- */
+.company-picker { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px; margin-bottom: 18px; box-shadow: var(--shadow); }
+.picker-label { display: block; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin-bottom: 6px; }
+.combo { position: relative; max-width: 560px; }
+.combo-input { width: 100%; padding: 11px 14px; border: 1px solid var(--brand); border-radius: 9px; font-size: 16px; color: var(--ink); background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2 4l4 4 4-4' stroke='%231b4f7a' stroke-width='1.6' fill='none'/%3E%3C/svg%3E") no-repeat right 14px center; }
+.combo-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(10,125,82,.12); }
+.combo-panel { position: absolute; z-index: 60; top: calc(100% + 4px); left: 0; right: 0; max-height: 340px; overflow-y: auto; background: #fff; border: 1px solid var(--line); border-radius: 9px; box-shadow: 0 8px 28px rgba(20,40,60,.18); }
+.combo-panel.hidden { display: none; }
+.combo-opt { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 9px 13px; cursor: pointer; font-size: 14px; border-bottom: 1px solid #f0f3f7; }
+.combo-opt:hover, .combo-opt.active { background: #eef5fb; }
+.combo-opt .pill-count { background: #eef3f8; color: var(--muted); font-size: 11px; padding: 1px 7px; border-radius: 999px; }
+.combo-empty { padding: 12px 13px; color: var(--muted); font-size: 13px; }
+
 /* ---- company contact table ---- */
 .table-wrap { overflow-x: auto; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); }
 .contact-table { width: 100%; border-collapse: collapse; font-size: 13px; }
