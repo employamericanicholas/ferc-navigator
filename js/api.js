@@ -17,6 +17,12 @@ const FERC = {
     return `https://elibrary.ferc.gov/eLibrary/docinfo?accession_number=${encodeURIComponent(accession)}`;
   },
 
+  // FERC's official Service List tool — the public source for the contact
+  // emails / phone numbers / mailing addresses we can't get from the API.
+  serviceListUrl(docket) {
+    return `https://elibrary.ferc.gov/eLibrary/servicelist?docket=${encodeURIComponent(docket)}`;
+  },
+
   // ---- low-level POST helper ------------------------------------------------
   async _post(path, body, asBlob = false) {
     const res = await fetch(`${this.BASE}/${path}`, {
@@ -45,6 +51,7 @@ const FERC = {
       libraries = [],
       categories = [],
       classTypes = [],
+      person = null,          // { lastName?, firstInitial?, affiliation? }
       page = 1,
       perPage = 50,
     } = opts;
@@ -54,13 +61,25 @@ const FERC = {
       dateSearches.push({ dateType, startDate, endDate });
     }
 
+    // Server-side filter by an author/affiliation. Verified: passing only the
+    // keys you care about (lastName, firstInitial, affiliation) filters
+    // precisely across the entire corpus.
+    const affiliations = [];
+    if (person) {
+      const a = {};
+      if (person.lastName) a.lastName = person.lastName;
+      if (person.firstInitial) a.firstInitial = person.firstInitial;
+      if (person.affiliation) a.affiliation = person.affiliation;
+      if (Object.keys(a).length) affiliations.push(a);
+    }
+
     return {
       searchText: text && text.trim() ? text.trim() : "*",
       searchFullText: !!fullText,
       searchDescription: !!description,
       dateSearches,
       availability: null,
-      affiliations: [],
+      affiliations,
       categories,
       libraries,
       accessionNumber: accessionNumber || null,
@@ -113,6 +132,15 @@ function normalizeFiling(h) {
     desc: t.fileDesc || "",
     size: t.fileSize || 0,
   }));
+  // People tied to the filing. FERC only structures last name + initials and
+  // the affiliation (employer/organization) — no full first name, email, phone.
+  const people = (h.affiliations || []).map((a) => ({
+    last: (a.lastName || "").trim(),
+    fi: (a.firstInitial || "").trim().replace(/^x$/i, ""),
+    mi: (a.middleInitial || "").trim().replace(/^x$/i, ""),
+    org: (a.affiliation || "").trim(),
+    role: a.afType || "", // AUTHOR | RECIPIENT
+  }));
   return {
     accession: h.acesssionNumber || h.accessionNumber || "",
     documentId: h.documentId || "",
@@ -128,6 +156,8 @@ function normalizeFiling(h) {
     issuedDate: h.issuedDate || "",
     postedDate: h.postedDate || "",
     files,
+    people,
+    authors: people.filter((p) => p.role === "AUTHOR" && (p.last || p.org)),
   };
 }
 

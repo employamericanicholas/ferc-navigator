@@ -44,6 +44,7 @@ const App = {
     this.setActiveNav(parts[0] || "recent");
 
     if (parts[0] === "search") return this.viewSearch(params);
+    if (parts[0] === "people") return this.viewPeople(params);
     if (parts[0] === "docket") return this.viewDocket(decodeURIComponent(parts[1] || ""), params);
     return this.viewRecent(params);
   },
@@ -103,6 +104,7 @@ const App = {
 
     return Util.el("article", { class: "filing" }, [
       Util.el("p", { class: "filing-desc", html: Util.highlight(f.description, term) }),
+      this.authorsLine(f.authors),
       meta,
       Util.el("div", { class: "filing-tags" },
         f.classTypes.map((c) => Util.el("span", { class: "tag" }, c))),
@@ -140,6 +142,89 @@ const App = {
       }
     });
     return Util.el("div", { class: "file-row" }, [btn]);
+  },
+
+  // "Filed by: <name> — <employer>", names/orgs link into People search.
+  authorsLine(authors) {
+    if (!authors || !authors.length) return null;
+    const seen = new Set();
+    const parts = [];
+    for (const p of authors) {
+      const key = Util.personKey(p);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const bits = [];
+      if (p.last) {
+        const u = new URLSearchParams({ last: p.last });
+        if (p.fi) u.set("fi", p.fi);
+        bits.push(Util.el("a", { href: `#/people?${u.toString()}`, class: "author-name" }, Util.personName(p)));
+      }
+      if (p.org) {
+        if (bits.length) bits.push(document.createTextNode(" — "));
+        bits.push(Util.el("a", { href: `#/people?org=${encodeURIComponent(p.org)}`, class: "author-org" }, p.org));
+      }
+      if (bits.length) parts.push(Util.el("span", { class: "author-chip" }, bits));
+    }
+    if (!parts.length) return null;
+    return Util.el("div", { class: "authors-line" },
+      [Util.el("span", { class: "authors-label" }, "Filed by: "), ...parts]);
+  },
+
+  // Aggregate AUTHOR people across a set of filings into directory rows.
+  aggregatePeople(filings) {
+    const map = new Map();
+    for (const f of filings) {
+      const ts = Util.ts(f.filedDate);
+      for (const p of f.authors) {
+        if (!p.last && !p.org) continue;
+        const key = Util.personKey(p);
+        if (!map.has(key)) {
+          map.set(key, {
+            last: p.last, fi: p.fi, mi: p.mi, org: p.org,
+            count: 0, firstTs: Infinity, lastTs: 0,
+            firstDate: "", lastDate: "", filings: [],
+          });
+        }
+        const g = map.get(key);
+        g.count++;
+        g.filings.push(f);
+        if (ts && ts < g.firstTs) { g.firstTs = ts; g.firstDate = f.filedDate; }
+        if (ts >= g.lastTs) { g.lastTs = ts; g.lastDate = f.filedDate; }
+      }
+    }
+    return [...map.values()].sort((a, b) => b.count - a.count || b.lastTs - a.lastTs);
+  },
+
+  // Aggregate distinct employers across filings.
+  aggregateOrgs(filings) {
+    const map = new Map();
+    for (const f of filings) {
+      for (const org of new Set(f.authors.map((p) => p.org).filter(Boolean))) {
+        const key = org.toLowerCase();
+        if (!map.has(key)) map.set(key, { org, count: 0, people: new Set() });
+        const g = map.get(key);
+        g.count++;
+        for (const p of f.authors) if (p.org === org && p.last) g.people.add(Util.personName(p));
+      }
+    }
+    return [...map.values()].sort((a, b) => b.count - a.count);
+  },
+
+  // Page through a filtered search up to a cap, for full aggregation.
+  async fetchAll(opts, cap = 1000, onProgress) {
+    const perPage = 100;
+    let page = 1;
+    const all = [];
+    let total = Infinity;
+    while (all.length < Math.min(cap, total)) {
+      const res = await FERC.search({ ...opts, perPage, page });
+      total = res.totalHits;
+      all.push(...res.hits);
+      if (onProgress) onProgress(all.length, total);
+      if (!res.hits.length || page * perPage >= total) break;
+      page++;
+    }
+    return { hits: all, total };
   },
 
   pager(total, page, perPage, onGo) {
@@ -359,11 +444,268 @@ const App = {
 
       this.root.replaceChildren(
         head,
+        this.docketPeoplePanel(docket, filings, res.totalHits > filings.length),
         Util.el("div", { class: "results" }, cards),
         this.pager(res.totalHits, res.page, res.perPage, goto),
       );
     } catch (e) {
       this.error(e, () => this.viewDocket(docket, params));
+    }
+  },
+
+  // Panel listing the people & organizations that filed in a docket.
+  docketPeoplePanel(docket, filings, partial) {
+    const people = this.aggregatePeople(filings);
+    const orgs = this.aggregateOrgs(filings);
+
+    const peopleChips = people.length
+      ? people.slice(0, 60).map((p) => {
+          const u = new URLSearchParams({ last: p.last });
+          if (p.fi) u.set("fi", p.fi);
+          return Util.el("a", {
+            class: "person-pill",
+            href: p.last ? `#/people?${u.toString()}` : `#/people?org=${encodeURIComponent(p.org)}`,
+            title: p.org,
+          }, [Util.personName(p), Util.el("span", { class: "pill-count" }, String(p.count))]);
+        })
+      : [Util.el("span", { class: "muted" }, "No named filers found on this page.")];
+
+    const orgChips = orgs.slice(0, 40).map((o) =>
+      Util.el("a", {
+        class: "person-pill org",
+        href: `#/people?org=${encodeURIComponent(o.org)}`,
+      }, [o.org, Util.el("span", { class: "pill-count" }, String(o.count))]));
+
+    return Util.el("section", { class: "people-panel" }, [
+      Util.el("div", { class: "people-panel-head" }, [
+        Util.el("h3", {}, "People & organizations in this docket"),
+        Util.el("a", {
+          class: "btn btn-sm btn-ghost-dark",
+          href: FERC.serviceListUrl(docket),
+          target: "_blank", rel: "noopener",
+          title: "FERC's official Service List has emails, phone numbers and mailing addresses",
+        }, "Contacts (email/phone) at FERC ↗"),
+      ]),
+      partial ? Util.el("p", { class: "muted small" },
+        "Showing filers from this page of the docket. Page through for the rest.") : null,
+      Util.el("div", { class: "panel-sub" }, "People"),
+      Util.el("div", { class: "pill-row" }, peopleChips),
+      orgChips.length ? Util.el("div", { class: "panel-sub" }, "Organizations") : null,
+      orgChips.length ? Util.el("div", { class: "pill-row" }, orgChips) : null,
+    ]);
+  },
+
+  // ---- VIEW: people & organizations -----------------------------------------
+  async viewPeople(params) {
+    const last = (params.get("last") || "").trim();
+    const fi = (params.get("fi") || "").trim();
+    const org = (params.get("org") || "").trim();
+    const page = parseInt(params.get("page") || "1", 10);
+    const hasCriteria = !!(last || org);
+
+    const form = this.peopleForm({ last, fi, org });
+    this.root.replaceChildren(form, this.loadingInline());
+
+    if (!hasCriteria) return this.peopleBrowse(form, params);
+
+    try {
+      const perPage = 50;
+      const opts = { person: { lastName: last, firstInitial: fi, affiliation: org }, perPage, page };
+      const res = await FERC.search(opts);
+
+      const title = org && !last ? `Organization: ${org}`
+        : `Person: ${last}${fi ? `, ${fi}` : ""}${org ? ` @ ${org}` : ""}`;
+
+      const head = Util.el("div", { class: "view-head" }, [
+        Util.el("h1", {}, title),
+        Util.el("p", { class: "muted" },
+          `${res.totalHits.toLocaleString()} filings match across all of FERC eLibrary.`),
+        Util.el("p", { class: "note-contacts" }, [
+          "ℹ️ Names are last-name + initial and employer only — FERC doesn't expose email/phone here. ",
+          "Use the ", Util.el("strong", {}, "Contacts at FERC"),
+          " link on any docket for the official Service List (emails, phones, addresses).",
+        ]),
+      ]);
+
+      // Profile box, fleshed out by the "build full profile" scan.
+      const profileBox = Util.el("div", { class: "profile-box" });
+      const scanBtn = Util.el("button", { class: "btn btn-sm btn-primary" },
+        `Build full profile — scan all ${res.totalHits.toLocaleString()} filings`);
+      scanBtn.addEventListener("click", () => this.buildProfile(scanBtn, profileBox, opts, { last, fi, org }));
+      profileBox.append(
+        Util.el("p", { class: "muted small" },
+          "Aggregate every employer, co-filer and docket for this query."),
+        scanBtn);
+
+      const goto = (p) => {
+        const u = new URLSearchParams(params);
+        u.set("page", p);
+        location.hash = `#/people?${u.toString()}`;
+      };
+
+      const cards = res.hits.length
+        ? res.hits.map((f) => this.filingCard(f))
+        : [Util.el("p", { class: "muted pad" }, "No filings matched.")];
+
+      this.root.replaceChildren(
+        form, head, profileBox,
+        Util.el("div", { class: "results-head" }, [
+          Util.el("h2", {}, "Filings"),
+          this.exportBar(res.hits, `people-${(last || org).replace(/\W+/g, "_")}`),
+        ]),
+        Util.el("div", { class: "results" }, cards),
+        this.pager(res.totalHits, res.page, res.perPage, goto),
+      );
+    } catch (e) {
+      this.root.replaceChildren(form);
+      this.error(e, () => this.viewPeople(params));
+    }
+  },
+
+  peopleForm({ last, fi, org }) {
+    const form = Util.el("form", { class: "search-controls" });
+    const lastI = Util.el("input", { type: "text", value: last, placeholder: "Last name (e.g. Darling)" });
+    const fiI = Util.el("input", { type: "text", value: fi, placeholder: "Initial", maxlength: "1", class: "ctl-initial" });
+    const orgI = Util.el("input", { type: "text", value: org, placeholder: "Employer / organization (e.g. Duke Energy)" });
+    form.replaceChildren(
+      Util.el("div", { class: "ctl-row" }, [
+        Util.el("label", { class: "ctl-field" }, ["Last name", lastI]),
+        Util.el("label", { class: "ctl-field" }, ["First initial", fiI]),
+        Util.el("label", { class: "ctl-field grow" }, ["Employer", orgI]),
+        Util.el("button", { class: "btn", type: "submit" }, "Find"),
+      ]),
+      Util.el("p", { class: "muted small" },
+        "Search the whole FERC corpus by who filed. Fill in any field — last name, employer, or both."),
+    );
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const u = new URLSearchParams();
+      if (lastI.value.trim()) u.set("last", lastI.value.trim());
+      if (fiI.value.trim()) u.set("fi", fiI.value.trim());
+      if (orgI.value.trim()) u.set("org", orgI.value.trim());
+      location.hash = u.toString() ? `#/people?${u.toString()}` : "#/people";
+    });
+    return form;
+  },
+
+  // Scan all matching filings and render an aggregated profile.
+  async buildProfile(btn, box, opts, q) {
+    btn.disabled = true;
+    const orig = btn.textContent;
+    const { hits, total } = await this.fetchAll(opts, 3000, (n, t) => {
+      btn.textContent = `Scanning ${n}/${Math.min(t, 3000).toLocaleString()}…`;
+    });
+
+    const orgs = this.aggregateOrgs(hits);
+    // Co-filers: other authors appearing alongside the queried person.
+    const people = this.aggregatePeople(hits);
+    const dockets = new Map();
+    let firstTs = Infinity, lastTs = 0, firstD = "", lastD = "";
+    for (const f of hits) {
+      const ts = Util.ts(f.filedDate);
+      if (ts && ts < firstTs) { firstTs = ts; firstD = f.filedDate; }
+      if (ts >= lastTs) { lastTs = ts; lastD = f.filedDate; }
+      for (const d of f.dockets) {
+        const b = Util.baseDocket(d);
+        dockets.set(b, (dockets.get(b) || 0) + 1);
+      }
+    }
+    const topDockets = [...dockets.entries()].sort((a, b) => b[1] - a[1]).slice(0, 30);
+
+    const stat = (label, val) => Util.el("div", { class: "stat" },
+      [Util.el("div", { class: "stat-num" }, String(val)), Util.el("div", { class: "stat-label" }, label)]);
+
+    box.replaceChildren(
+      Util.el("div", { class: "stats-row" }, [
+        stat("filings scanned", hits.length.toLocaleString() + (total > hits.length ? `/${total.toLocaleString()}` : "")),
+        stat("employers", orgs.length),
+        stat("dockets", dockets.size),
+        stat("active since", firstD || "—"),
+        stat("last filed", lastD || "—"),
+      ]),
+      Util.el("div", { class: "profile-cols" }, [
+        Util.el("div", {}, [
+          Util.el("div", { class: "panel-sub" }, "Employers"),
+          Util.el("div", { class: "pill-row" }, orgs.slice(0, 30).map((o) =>
+            Util.el("a", { class: "person-pill org", href: `#/people?org=${encodeURIComponent(o.org)}` },
+              [o.org, Util.el("span", { class: "pill-count" }, String(o.count))]))),
+        ]),
+        Util.el("div", {}, [
+          Util.el("div", { class: "panel-sub" }, "Dockets"),
+          Util.el("div", { class: "pill-row" }, topDockets.map(([d, c]) =>
+            Util.el("a", { class: "person-pill", href: `#/docket/${encodeURIComponent(d)}` },
+              [d, Util.el("span", { class: "pill-count" }, String(c))]))),
+        ]),
+      ]),
+      Util.el("div", { class: "export-bar" }, [
+        Util.el("button", { class: "btn btn-sm", onclick: () =>
+          Util.saveText(Util.peopleToCsv(people), `people_${(q.last || q.org).replace(/\W+/g, "_")}.csv`, "text/csv") },
+          "⬇ People CSV"),
+        Util.el("button", { class: "btn btn-sm", onclick: () =>
+          Util.saveText(Util.filingsToCsv(hits), `filings_${(q.last || q.org).replace(/\W+/g, "_")}.csv`, "text/csv") },
+          `⬇ All ${hits.length} filings (CSV)`),
+      ]),
+    );
+    btn.textContent = orig;
+  },
+
+  // Browse mode: a directory of people active in a recent time window.
+  async peopleBrowse(form, params) {
+    const days = parseInt(params.get("days") || "3", 10);
+    this.root.replaceChildren(form, this.loadingInline());
+    try {
+      const end = new Date();
+      const start = Util.daysAgo(days);
+      const { hits } = await this.fetchAll(
+        { text: "*", startDate: Util.fmtDate(start), endDate: Util.fmtDate(end), dateType: "filed_date" },
+        1500);
+
+      const people = this.aggregatePeople(hits);
+      const orgs = this.aggregateOrgs(hits);
+
+      const head = Util.el("div", { class: "view-head" }, [
+        Util.el("h1", {}, "People directory"),
+        Util.el("p", { class: "muted" },
+          `${people.length.toLocaleString()} people from ${orgs.length.toLocaleString()} organizations filed in the last ${days} day(s). Use the form above to look anyone up across all of FERC history.`),
+        Util.el("div", { class: "window-controls" },
+          [1, 3, 7, 14].map((n) =>
+            Util.el("a", { class: "chip" + (n === days ? " active" : ""), href: `#/people?days=${n}` },
+              n === 1 ? "Today" : `${n} days`))),
+      ]);
+
+      // Client-side filter box over the loaded directory.
+      const filter = Util.el("input", { type: "text", class: "ctl-q", placeholder: "Filter this list by name or employer…" });
+      const listWrap = Util.el("div", { class: "people-grid" });
+      const render = (q) => {
+        const ql = q.toLowerCase();
+        const rows = people.filter((p) =>
+          !ql || Util.personName(p).toLowerCase().includes(ql) || p.org.toLowerCase().includes(ql));
+        listWrap.replaceChildren(...rows.slice(0, 400).map((p) => {
+          const u = new URLSearchParams({ last: p.last });
+          if (p.fi) u.set("fi", p.fi);
+          return Util.el("a", {
+            class: "people-card",
+            href: p.last ? `#/people?${u.toString()}` : `#/people?org=${encodeURIComponent(p.org)}`,
+          }, [
+            Util.el("div", { class: "pc-name" }, Util.personName(p)),
+            Util.el("div", { class: "pc-org" }, p.org || "—"),
+            Util.el("div", { class: "pc-meta" }, `${p.count} filing${p.count === 1 ? "" : "s"} · latest ${Util.date(p.lastDate)}`),
+          ]);
+        }));
+        if (!rows.length) listWrap.replaceChildren(Util.el("p", { class: "muted pad" }, "No matches."));
+      };
+      filter.addEventListener("input", () => render(filter.value));
+      render("");
+
+      this.root.replaceChildren(form, head,
+        Util.el("div", { class: "results-head" }, [filter,
+          Util.el("button", { class: "btn btn-sm", onclick: () =>
+            Util.saveText(Util.peopleToCsv(people), `people_last_${days}d.csv`, "text/csv") }, "⬇ People CSV"),
+        ]),
+        listWrap);
+    } catch (e) {
+      this.root.replaceChildren(form);
+      this.error(e, () => this.peopleBrowse(form, params));
     }
   },
 

@@ -82,6 +82,18 @@ const Util = {
     this.saveBlob(new Blob([text], { type: mime }), filename);
   },
 
+  // ---- people ---------------------------------------------------------------
+  // "Darling, J A" from a person record (FERC only gives last name + initials).
+  personName(p) {
+    const initials = [p.fi, p.mi].filter(Boolean).join(" ");
+    if (!p.last) return p.org || "(unknown)";
+    return initials ? `${p.last}, ${initials}` : p.last;
+  },
+
+  personKey(p) {
+    return [p.last.toLowerCase(), p.fi.toLowerCase(), p.org.toLowerCase()].join("|");
+  },
+
   // ---- CSV ------------------------------------------------------------------
   csvCell(v) {
     const s = String(v ?? "");
@@ -91,15 +103,30 @@ const Util = {
   filingsToCsv(filings) {
     const head = [
       "accession", "filed_date", "issued_date", "posted_date",
-      "dockets", "category", "class_types", "libraries",
-      "availability", "description", "num_files", "file_names", "file_ids",
+      "dockets", "category", "class_types", "libraries", "availability",
+      "authors", "author_employers",
+      "description", "num_files", "file_names", "file_ids",
     ];
     const rows = filings.map((f) => [
       f.accession, f.filedDate, f.issuedDate, f.postedDate,
       f.dockets.join("; "), f.category, f.classTypes.join("; "),
-      f.libraries.join("; "), f.availCode, f.description,
+      f.libraries.join("; "), f.availCode,
+      (f.authors || []).map((p) => this.personName(p)).join("; "),
+      [...new Set((f.authors || []).map((p) => p.org).filter(Boolean))].join("; "),
+      f.description,
       f.files.length, f.files.map((x) => x.name).join(" | "),
       f.files.map((x) => x.fileId).join(" | "),
+    ].map((c) => this.csvCell(c)).join(","));
+    return [head.join(","), ...rows].join("\n");
+  },
+
+  // CSV for an aggregated people directory.
+  peopleToCsv(people) {
+    const head = ["name", "last_name", "first_initial", "employer",
+      "filing_count", "first_filed", "last_filed"];
+    const rows = people.map((p) => [
+      this.personName(p), p.last, p.fi, p.org,
+      p.count, p.firstDate, p.lastDate,
     ].map((c) => this.csvCell(c)).join(","));
     return [head.join(","), ...rows].join("\n");
   },

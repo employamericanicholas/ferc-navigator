@@ -153,6 +153,48 @@ mark { background: #fde68a; padding: 0 2px; border-radius: 3px; }
 .code { background: #0f1b27; color: #d7e3ef; padding: 14px; border-radius: 8px; overflow: auto; font: 12px/1.45 "SF Mono", Menlo, Consolas, monospace; max-height: 50vh; }
 .modal-actions { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
 
+/* ---- authors line on filing cards ---- */
+.authors-line { font-size: 13px; margin: 0 0 10px; color: var(--ink); line-height: 1.7; }
+.authors-label { color: var(--muted); font-weight: 600; }
+.author-chip:not(:last-child)::after { content: " ·"; color: var(--line); }
+.author-name { font-weight: 600; }
+.author-org { color: var(--accent); }
+
+/* ---- people panel (docket) & profile ---- */
+.people-panel { background: #f0f5fa; border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px; margin-bottom: 18px; }
+.people-panel-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.people-panel-head h3 { margin: 0; font-size: 16px; }
+.btn-ghost-dark { background: #fff; color: var(--brand-700); border: 1px solid var(--brand); }
+.btn-ghost-dark:hover { background: #eef3f8; filter: none; }
+.panel-sub { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 12px 0 6px; }
+.pill-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.person-pill { display: inline-flex; align-items: center; gap: 6px; background: #fff; border: 1px solid var(--line); border-radius: 999px; padding: 4px 6px 4px 11px; font-size: 13px; color: var(--brand-700); }
+.person-pill:hover { border-color: var(--brand); text-decoration: none; }
+.person-pill.org { color: var(--accent); }
+.pill-count { background: #eef3f8; color: var(--muted); font-size: 11px; padding: 1px 7px; border-radius: 999px; }
+
+.note-contacts { font-size: 13px; background: #fffaf0; border: 1px solid #f3e1bf; border-radius: 8px; padding: 9px 12px; color: #6b5424; }
+
+.profile-box { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px; margin-bottom: 18px; box-shadow: var(--shadow); }
+.stats-row { display: flex; flex-wrap: wrap; gap: 22px; margin-bottom: 8px; }
+.stat-num { font-size: 22px; font-weight: 700; color: var(--brand-700); }
+.stat-label { font-size: 12px; color: var(--muted); }
+.profile-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin: 12px 0; }
+@media (max-width: 640px) { .profile-cols { grid-template-columns: 1fr; } }
+
+/* people directory grid */
+.people-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+.people-card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 13px 15px; color: var(--ink); box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 3px; }
+.people-card:hover { text-decoration: none; border-color: var(--brand); transform: translateY(-2px); }
+.pc-name { font-weight: 700; color: var(--brand-700); }
+.pc-org { font-size: 13px; color: var(--accent); }
+.pc-meta { font-size: 12px; color: var(--muted); }
+
+.ctl-field { display: flex; flex-direction: column; font-size: 12px; color: var(--muted); gap: 3px; }
+.ctl-field input { padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; font-size: 15px; color: var(--ink); }
+.ctl-field.grow { flex: 1 1 280px; }
+.ctl-initial { width: 64px; }
+
 /* ---- footer ---- */
 .site-footer { border-top: 1px solid var(--line); background: var(--panel); padding: 18px 20px; }
 .site-footer p { max-width: 1080px; margin: 0 auto; font-size: 12px; color: var(--muted); }

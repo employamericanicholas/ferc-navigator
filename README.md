@@ -11,6 +11,8 @@ Commission's repository of every filing, order, and document it has on record.
 - 📄 **One-click PDF access** — download any filing's files straight from FERC.
 - 📦 **Export by docket** — metadata as CSV/JSON, a bulk **ZIP of all PDFs** in
   the browser, or a standalone Python script that archives an entire docket.
+- 👤 **Search by person & organization** — find every filing a named person or
+  an employer has ever submitted, across all of FERC history.
 
 It's a single static site (plain HTML/CSS/JS, no build step), so you can publish
 it to GitHub Pages by just pushing the repo.
@@ -36,6 +38,43 @@ server of your own. That means:
 When you genuinely want the bytes on disk, the **export tools** pull the PDFs for
 a docket — in-browser as a ZIP, or via the included
 [`scripts/download_docket.py`](scripts/download_docket.py) for any size of docket.
+
+---
+
+## People & organizations ("who filed this, and who do they work for")
+
+The **People & orgs** tab lets you:
+
+- **Look anyone up across the entire corpus** — type a last name (optionally a
+  first initial) and/or an employer. FERC filters server-side, so you get *every*
+  matching filing in eLibrary, not a sample.
+- **Build a full profile** — one click pages through all of a person's or
+  organization's filings and aggregates their employers, the dockets they work
+  in, and date range, with CSV export.
+- **Browse a directory** of everyone who filed in a recent window.
+- **See filers on any docket** — each docket page lists the people and
+  organizations that filed there, linked to their profiles.
+
+Every filing card also shows a **"Filed by:"** line (name + employer), and those
+names/employers are clickable.
+
+### What's available vs. what isn't — be aware
+FERC's structured metadata only contains, for each filer:
+
+- ✅ **Last name + first/middle initial** (not the full first name)
+- ✅ **Employer / organization** (the "affiliation")
+- ✅ The filings themselves and their dates
+
+It does **not** expose **email, phone, or mailing address** through this API.
+Those live in two places this static site can't reach directly:
+
+1. **The PDF signature blocks** — unstructured text inside the documents.
+2. **FERC's official Service List** — which *does* have emails/phones/addresses,
+   but sits behind a web firewall with no public JSON/CORS access.
+
+So for contact details, every docket page (and person profile) links out to
+**"Contacts (email/phone) at FERC ↗"**, which opens FERC's Service List tool for
+that docket. That's the authoritative, official source for contact information.
 
 ---
 
@@ -93,7 +132,9 @@ No dependencies — standard-library Python 3 only.
 Base: `https://elibrary.ferc.gov/eLibrarywebapi/api`
 
 - `POST Search/AdvancedSearch` — keyword/full-text search with docket, date, and
-  library filters. Set `searchFullText: true` to search inside PDF text.
+  library filters. Set `searchFullText: true` to search inside PDF text. Set
+  `affiliations: [{ "lastName": "...", "firstInitial": "...", "affiliation": "..." }]`
+  to filter by who filed (any subset of those keys) — this powers People search.
 - `POST File/DownloadP8File` — body `{"fileidLst": ["<fileId>"]}` returns the raw
   file bytes.
 
